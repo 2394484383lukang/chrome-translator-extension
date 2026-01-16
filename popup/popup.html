@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI翻译助手</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI翻译助手</h1>
+            <button id="optionsBtn" class="options-btn">⚙️ 设置</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="translation-mode">
+                <h3>翻译模式</h3>
+                <div class="mode-buttons">
+                    <button id="selectionMode" class="mode-btn active">划词翻译</button>
+                    <button id="pageMode" class="mode-btn">页面翻译</button>
+                </div>
+            </div>
+            
+            <div class="input-section">
+                <textarea id="inputText" placeholder="选择要翻译的文本，或点击页面翻译..."></textarea>
+                <div class="action-buttons">
+                    <button id="translateBtn" class="translate-btn">翻译</button>
+                    <button id="clearBtn" class="clear-btn">清除</button>
+                </div>
+            </div>
+            
+            <div class="output-section">
+                <h3>翻译结果</h3>
+                <div id="outputText" class="output-text"></div>
+                <button id="copyBtn" class="copy-btn">📋 复制</button>
+            </div>
+            
+            <div class="status-bar">
+                <span id="statusText">就绪</span>
+                <span id="apiProvider"></span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
