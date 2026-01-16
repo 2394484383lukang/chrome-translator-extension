@@ -1,6 +1,30 @@
 // Content Script - 处理页面内的划词翻译和页面翻译
 
 let currentSelection = '';
+let autoTranslateEnabled = false;
+
+// 监听文本选择事件
+document.addEventListener('mouseup', function(event) {
+    // 检查是否启用了自动翻译
+    chrome.storage.local.get(['autoTranslateOnSelection'], function(result) {
+        autoTranslateEnabled = result.autoTranslateOnSelection || false;
+        
+        if (autoTranslateEnabled) {
+            // 延迟一点确保选择完成
+            setTimeout(function() {
+                const selection = window.getSelection().toString().trim();
+                if (selection && selection.length > 0) {
+                    currentSelection = selection;
+                    // 获取鼠标位置
+                    const x = event.clientX;
+                    const y = event.clientY;
+                    // 显示翻译气泡
+                    showTranslationBubble(x, y, selection);
+                }
+            }, 100);
+        }
+    });
+});
 
 // 移除自动弹出气泡功能，只保留右键菜单和popup翻译
 
@@ -14,6 +38,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         translateAndShow(request.text);
     } else if (request.action === 'translatePage') {
         translatePage();
+    } else if (request.action === 'translatePageInline') {
+        translatePageInline();
+    } else if (request.action === 'toggleTranslations') {
+        toggleTranslations();
+        sendResponse({success: true});
     } else if (request.action === 'showTranslation') {
         showTranslationResult(request.result);
     } else if (request.action === 'showRightClickTranslation') {
@@ -291,4 +320,327 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// 悬浮球功能
+let floatingBall = null;
+let isTranslating = false;
+let isTranslationVisible = true;
+
+function createFloatingBall() {
+    if (floatingBall) return;
+    
+    floatingBall = document.createElement('div');
+    floatingBall.className = 'floating-ball';
+    floatingBall.innerHTML = `
+        <div class="floating-ball-icon">🌐</div>
+        <div class="floating-ball-close">×</div>
+    `;
+    
+    document.body.appendChild(floatingBall);
+    
+    const closeBtn = floatingBall.querySelector('.floating-ball-close');
+    
+    // 关闭悬浮球
+    closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        hideFloatingBall();
+    });
+    
+    // 点击悬浮球直接翻译页面
+    floatingBall.addEventListener('click', function(e) {
+        if (!e.target.closest('.floating-ball-close')) {
+            handleFloatingBallClick();
+        }
+    });
+}
+
+
+function showFloatingBall() {
+    if (!floatingBall) {
+        createFloatingBall();
+    }
+    floatingBall.style.display = 'flex';
+}
+
+function hideFloatingBall() {
+    if (floatingBall) {
+        floatingBall.style.display = 'none';
+    }
+}
+
+// 处理悬浮球点击
+function handleFloatingBallClick() {
+    if (isTranslating) {
+        return; // 正在翻译中，忽略点击
+    }
+    
+    const translations = document.querySelectorAll('.inline-translation');
+    
+    if (translations.length > 0) {
+        // 已经翻译过，切换显示/隐藏
+        toggleTranslations();
+    } else {
+        // 还没有翻译，开始翻译
+        translatePageInline();
+    }
+}
+
+// 切换翻译结果显示/隐藏
+function toggleTranslations() {
+    const translations = document.querySelectorAll('.inline-translation');
+    
+    if (translations.length === 0) {
+        showToast('请先翻译页面');
+        return;
+    }
+    
+    isTranslationVisible = !isTranslationVisible;
+    
+    translations.forEach(translation => {
+        translation.style.display = isTranslationVisible ? 'block' : 'none';
+    });
+    
+    // 显示提示
+    showToast(isTranslationVisible ? '显示翻译' : '显示原文');
+}
+
+// 显示提示信息
+function showToast(message) {
+    // 移除已存在的提示
+    const existingToast = document.querySelector('.translation-toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = 'translation-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 2000);
+}
+
+// 检查是否显示悬浮球
+chrome.storage.local.get(['showFloatingBall'], function(result) {
+    if (result.showFloatingBall !== false) {
+        showFloatingBall();
+    }
+});
+
+// 监听悬浮球显示状态变化
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+    if (namespace === 'local' && changes.showFloatingBall) {
+        if (changes.showFloatingBall.newValue) {
+            showFloatingBall();
+        } else {
+            hideFloatingBall();
+        }
+    }
+    
+    // 监听自动翻译设置变化
+    if (namespace === 'local' && changes.autoTranslateOnSelection) {
+        autoTranslateEnabled = changes.autoTranslateOnSelection.newValue || false;
+        if (autoTranslateEnabled) {
+            showToast('已启用选中文本自动翻译');
+        } else {
+            showToast('已关闭选中文本自动翻译');
+        }
+    }
+});
+
+// 内联翻译页面
+function translatePageInline() {
+    // 检查是否已经翻译过
+    if (document.querySelector('.inline-translation')) {
+        // 已经翻译过，切换显示状态
+        toggleTranslations();
+        return;
+    }
+    
+    // 设置翻译状态
+    isTranslating = true;
+    
+    // 显示进度提示
+    const progressDiv = document.createElement('div');
+    progressDiv.id = 'page-translation-progress';
+    progressDiv.className = 'page-translation-progress';
+    progressDiv.innerHTML = '<div class="progress-content">正在翻译页面，请稍候...</div>';
+    document.body.appendChild(progressDiv);
+    
+    // 获取页面中所有文本节点
+    const textNodes = [];
+    const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+            acceptNode: function(node) {
+                // 跳过空白节点和已经在翻译元素中的节点
+                if (!node.textContent.trim() || 
+                    node.parentElement.classList.contains('inline-translation') ||
+                    node.parentElement.classList.contains('page-translation-progress') ||
+                    node.parentElement.classList.contains('floating-ball') ||
+                    node.parentElement.classList.contains('floating-ball-menu') ||
+                    node.parentElement.classList.contains('floating-ball-menu-item') ||
+                    node.parentElement.closest('.floating-ball')) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        }
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+        const text = node.textContent.trim();
+        if (text.length > 1) { // 只翻译长度大于1的文本
+            // 跳过script、style、code等特殊标签的内容
+            const parentTag = node.parentElement.tagName.toLowerCase();
+            if (!['script', 'style', 'code', 'pre', 'noscript'].includes(parentTag)) {
+                textNodes.push(node);
+            }
+        }
+    }
+    
+    if (textNodes.length === 0) {
+        if (progressDiv.parentNode) {
+            document.body.removeChild(progressDiv);
+        }
+        alert('没有找到需要翻译的文本内容');
+        return;
+    }
+    
+    console.log(`Found ${textNodes.length} text nodes to translate`);
+    
+    // 获取API提供商配置，根据内容大小和API限制动态计算批大小
+    chrome.storage.local.get(['apiProvider'], function(result) {
+        // 分析待翻译内容的文本大小分布
+        const textSizes = textNodes.map(node => node.textContent.length);
+        const avgTextSize = textSizes.reduce((a, b) => a + b, 0) / textNodes.length;
+        const maxTextSize = Math.max(...textSizes);
+        
+        // 不同API的文本长度限制（字符数）
+        const apiLimits = {
+            'deepseek': {
+                maxLength: 16000,      // DeepSeek单次请求最大长度
+                recommendedBatch: 8000, // 推荐单次处理长度
+                maxNodes: 150          // 最大节点数
+            },
+            'glm': {
+                maxLength: 12000,      // GLM-4单次请求最大长度
+                recommendedBatch: 6000, // 推荐单次处理长度
+                maxNodes: 120          // 最大节点数
+            },
+            'google': {
+                maxLength: 500,        // Google免费API单次限制
+                recommendedBatch: 400,  // 推荐单次处理长度
+                maxNodes: 20           // 最大节点数
+            },
+            'default': {
+                maxLength: 8000,
+                recommendedBatch: 4000,
+                maxNodes: 80
+            }
+        };
+        
+        const apiConfig = apiLimits[result.apiProvider] || apiLimits['default'];
+        
+        // 动态计算批大小
+        let batchSize;
+        
+        if (result.apiProvider === 'google') {
+            // Google API限制严格，基于字符数计算
+            batchSize = Math.floor(apiConfig.recommendedBatch / Math.max(avgTextSize, 50));
+            batchSize = Math.min(Math.max(batchSize, 5), apiConfig.maxNodes);
+        } else {
+            // AI API限制较宽松，可以处理更多节点
+            if (avgTextSize < 50) {
+                // 短文本较多，可以处理更多节点
+                batchSize = Math.min(apiConfig.maxNodes, 100);
+            } else if (avgTextSize < 200) {
+                // 中等长度文本
+                batchSize = Math.min(apiConfig.maxNodes, 80);
+            } else {
+                // 长文本，减少节点数避免超出长度限制
+                batchSize = Math.floor(apiConfig.recommendedBatch / avgTextSize);
+                batchSize = Math.max(Math.min(batchSize, 50), 20);
+            }
+        }
+        
+        console.log(`API: ${result.apiProvider}, Avg text size: ${Math.floor(avgTextSize)}, Calculated batch size: ${batchSize}`);
+        
+        translateBatchWithSize(batchSize, textNodes, progressDiv);
+    });
+}
+    
+    function translateBatchWithSize(batchSize, textNodes, progressDiv) {
+        let translatedCount = 0;
+        
+        function translateBatch() {
+            const batch = textNodes.slice(translatedCount, translatedCount + batchSize);
+            if (batch.length === 0) {
+            // 翻译完成
+            isTranslating = false;
+            if (progressDiv.parentNode) {
+                document.body.removeChild(progressDiv);
+            }
+            showToast('翻译完成');
+            console.log('Page translation completed');
+            return;
+        }
+        
+        // 更新进度
+        progressDiv.innerHTML = `<div class="progress-content">正在翻译页面... (${Math.min(translatedCount + batchSize, textNodes.length)}/${textNodes.length})</div>`;
+        
+        // 翻译当前批次
+        const textsToTranslate = batch.map(node => node.textContent.trim());
+        
+        chrome.runtime.sendMessage({
+            action: 'translateBatch',
+            texts: textsToTranslate
+        }, function(response) {
+            if (response && response.success && response.translations) {
+                response.translations.forEach((translation, index) => {
+                    if (translation && batch[index]) {
+                        insertTranslationAfterNode(batch[index], translation);
+                    }
+                });
+                
+                translatedCount += batch.length;
+                setTimeout(translateBatch, 100); // 减少延迟提高速度
+            } else {
+                isTranslating = false;
+                if (progressDiv.parentNode) {
+                    document.body.removeChild(progressDiv);
+                }
+                // 静默失败，不显示错误提示
+                console.error('Translation failed:', response ? response.error : 'Unknown error');
+            }
+        });
+    }
+    
+    translateBatch();
+}
+
+// 在文本节点后插入翻译结果
+function insertTranslationAfterNode(textNode, translation) {
+    const translationSpan = document.createElement('span');
+    translationSpan.className = 'inline-translation';
+    translationSpan.textContent = translation;
+    
+    // 创建包装器来保持原文和翻译在一起
+    const wrapper = document.createElement('span');
+    wrapper.className = 'translation-wrapper';
+    
+    // 获取文本节点的父元素
+    const parent = textNode.parentNode;
+    
+    // 在文本节点后插入翻译
+    if (textNode.nextSibling) {
+        parent.insertBefore(translationSpan, textNode.nextSibling);
+    } else {
+        parent.appendChild(translationSpan);
+    }
 }

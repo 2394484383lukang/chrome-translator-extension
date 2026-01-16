@@ -3,9 +3,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const optionsBtn = document.getElementById('optionsBtn');
     const selectionMode = document.getElementById('selectionMode');
     const pageMode = document.getElementById('pageMode');
+    const selectionContent = document.getElementById('selectionContent');
+    const pageContent = document.getElementById('pageContent');
     const inputText = document.getElementById('inputText');
     const translateBtn = document.getElementById('translateBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const pageTranslateBtn = document.getElementById('pageTranslateBtn');
+    const showOriginalBtn = document.getElementById('showOriginalBtn');
     const outputText = document.getElementById('outputText');
     const copyBtn = document.getElementById('copyBtn');
     const statusText = document.getElementById('statusText');
@@ -23,13 +27,17 @@ document.addEventListener('DOMContentLoaded', function() {
         currentMode = 'selection';
         selectionMode.classList.add('active');
         pageMode.classList.remove('active');
-        inputText.placeholder = '选择要翻译的文本，或点击页面翻译...';
+        selectionContent.style.display = 'block';
+        pageContent.style.display = 'none';
+        inputText.placeholder = '选择要翻译的文本...';
     });
 
     pageMode.addEventListener('click', function() {
         currentMode = 'page';
         pageMode.classList.add('active');
         selectionMode.classList.remove('active');
+        pageContent.style.display = 'block';
+        selectionContent.style.display = 'none';
         inputText.placeholder = '点击翻译按钮翻译整个页面...';
     });
 
@@ -42,27 +50,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 翻译按钮
+    // 划词翻译按钮
     translateBtn.addEventListener('click', async function() {
         const text = inputText.value.trim();
         
-        if (currentMode === 'page') {
-            // 页面翻译模式
-            showStatus('正在翻译页面...', 'loading');
-            
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'translatePage'}, function(response) {
-                    if (chrome.runtime.lastError) {
-                        showStatus('请刷新页面后重试', 'error');
-                    } else {
-                        showStatus('页面翻译已启动', 'success');
-                    }
-                });
-            });
-            return;
-        }
-        
-        // 划词翻译模式
         if (!text) {
             showStatus('请输入或选择要翻译的文本', 'error');
             return;
@@ -81,6 +72,34 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             translateBtn.disabled = false;
         }
+    });
+
+    // 页面翻译按钮
+    pageTranslateBtn.addEventListener('click', function() {
+        showStatus('正在翻译页面...', 'loading');
+        
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {action: 'translatePageInline'}, function(response) {
+                if (chrome.runtime.lastError) {
+                    showStatus('请刷新页面后重试', 'error');
+                } else {
+                    showStatus('页面翻译已启动', 'success');
+                }
+            });
+        });
+    });
+
+    // 显示原文按钮
+    showOriginalBtn.addEventListener('click', function() {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {action: 'toggleTranslations'}, function(response) {
+                if (chrome.runtime.lastError) {
+                    showStatus('请先翻译页面', 'error');
+                } else {
+                    showStatus('已切换显示状态', 'success');
+                }
+            });
+        });
     });
 
     // 清除按钮

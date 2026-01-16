@@ -22,18 +22,33 @@
                 </div>
             </div>
             
-            <div class="input-section">
-                <textarea id="inputText" placeholder="选择要翻译的文本，或点击页面翻译..."></textarea>
-                <div class="action-buttons">
-                    <button id="translateBtn" class="translate-btn">翻译</button>
-                    <button id="clearBtn" class="clear-btn">清除</button>
+            <!-- 划词翻译模式的内容 -->
+            <div id="selectionContent" class="mode-content">
+                <div class="input-section">
+                    <textarea id="inputText" placeholder="选择要翻译的文本..."></textarea>
+                    <div class="action-buttons">
+                        <button id="translateBtn" class="translate-btn">翻译</button>
+                        <button id="clearBtn" class="clear-btn">清除</button>
+                    </div>
+                </div>
+                
+                <div class="output-section">
+                    <h3>翻译结果</h3>
+                    <div id="outputText" class="output-text"></div>
+                    <button id="copyBtn" class="copy-btn">📋 复制</button>
                 </div>
             </div>
             
-            <div class="output-section">
-                <h3>翻译结果</h3>
-                <div id="outputText" class="output-text"></div>
-                <button id="copyBtn" class="copy-btn">📋 复制</button>
+            <!-- 页面翻译模式的内容 -->
+            <div id="pageContent" class="mode-content" style="display: none;">
+                <div class="page-translate-info">
+                    <p>点击下方按钮翻译整个页面</p>
+                    <p class="info-text">翻译结果将显示在页面文本下方</p>
+                </div>
+                <div class="action-buttons">
+                    <button id="pageTranslateBtn" class="translate-btn">开始翻译</button>
+                    <button id="showOriginalBtn" class="clear-btn">显示原文</button>
+                </div>
             </div>
             
             <div class="status-bar">

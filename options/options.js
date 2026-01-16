@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const glmModel = document.getElementById('glmModel');
     const targetLanguage = document.getElementById('targetLanguage');
     const translationStyle = document.getElementById('translationStyle');
+    const autoTranslateOnSelection = document.getElementById('autoTranslateOnSelection');
     const saveBtn = document.getElementById('saveBtn');
     const testBtn = document.getElementById('testBtn');
     const resetBtn = document.getElementById('resetBtn');
@@ -45,7 +46,8 @@ document.addEventListener('DOMContentLoaded', function() {
             'deepseekConfig',
             'glmConfig',
             'targetLanguage',
-            'translationStyle'
+            'translationStyle',
+            'autoTranslateOnSelection'
         ], function(result) {
             // 设置API提供商
             if (result.apiProvider) {
@@ -73,6 +75,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.translationStyle) {
                 translationStyle.value = result.translationStyle;
             }
+            
+            // 设置自动翻译开关
+            if (result.autoTranslateOnSelection !== undefined) {
+                autoTranslateOnSelection.checked = result.autoTranslateOnSelection;
+            } else {
+                autoTranslateOnSelection.checked = false; // 默认关闭
+            }
         });
     }
 
@@ -90,7 +99,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 model: glmModel.value
             },
             targetLanguage: targetLanguage.value,
-            translationStyle: translationStyle.value
+            translationStyle: translationStyle.value,
+            autoTranslateOnSelection: autoTranslateOnSelection.checked
         };
 
         // 验证必填字段（Google翻译不需要API Key）
@@ -123,20 +133,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // Google翻译不需要API Key验证
         
+        // 临时保存当前表单配置用于测试
+        const tempSettings = {
+            apiProvider: apiProvider,
+            deepseekConfig: {
+                apiKey: deepseekApiKey.value.trim(),
+                model: deepseekModel.value
+            },
+            glmConfig: {
+                apiKey: glmApiKey.value.trim(),
+                model: glmModel.value
+            },
+            targetLanguage: targetLanguage.value,
+            translationStyle: translationStyle.value
+        };
+        
         const testText = 'Hello, world!';
 
         showStatus('正在测试连接...', 'info');
 
-        chrome.runtime.sendMessage({
-            action: 'translate',
-            text: testText,
-            mode: 'test'
-        }, function(response) {
-            if (response && response.success) {
-                showStatus('✅ 连接测试成功！翻译结果：' + response.translation, 'success');
-            } else {
-                showStatus('❌ 连接测试失败：' + (response ? response.error : '未知错误'), 'error');
-            }
+        // 先临时保存配置
+        chrome.storage.local.set(tempSettings, function() {
+            // 然后进行测试
+            chrome.runtime.sendMessage({
+                action: 'translate',
+                text: testText,
+                mode: 'test'
+            }, function(response) {
+                if (response && response.success) {
+                    showStatus('✅ 连接测试成功！翻译结果：' + response.translation, 'success');
+                } else {
+                    showStatus('❌ 连接测试失败：' + (response ? response.error : '未知错误'), 'error');
+                }
+            });
         });
     }
 
@@ -149,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
             glmModel.value = 'glm-4';
             targetLanguage.value = 'zh';
             translationStyle.value = 'formal';
+            autoTranslateOnSelection.checked = false; // 重置为关闭
             
             // 重置为默认提供商
             const defaultRadio = document.querySelector('input[name="apiProvider"][value="deepseek"]');
